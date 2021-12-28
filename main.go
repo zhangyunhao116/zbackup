@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -59,11 +59,19 @@ func CompressDir(targetdir, workdir string) {
 	if err != nil {
 		logrus.Fatal(fmt.Sprintf("Open target file failed(%s):", path.Join(workdir, filename)), err.Error())
 	}
-	content, err := ioutil.ReadAll(tarfile)
-	if err != nil {
-		logrus.Fatal(fmt.Sprintf("Read target file failed(%s):", path.Join(workdir, filename)), err.Error())
+	digest := wyhash.NewDefault()
+	buffer := make([]byte, 1024)
+	for {
+		n, err := tarfile.Read(buffer)
+		if err == io.EOF {
+			digest.Write(buffer[:n])
+			break
+		} else if err != nil {
+			panic(err)
+		}
+		digest.Write(buffer[:n])
 	}
-	hashsum := fmt.Sprintf("%016x", wyhash.Sum64(content))
+	hashsum := fmt.Sprintf("%016x", digest.Sum64())
 	// Rename.
 	finalFileName := filename + "-wyf1-" + hashsum + ".zbackup"
 	execCommandPrintOnlyFailed("rename", "mv "+filename+" "+finalFileName)
